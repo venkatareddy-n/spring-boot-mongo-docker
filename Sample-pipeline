@@ -1,0 +1,62 @@
+pipeline {
+    agent any
+
+    tools {
+        maven 'maven-3.9.9' // This should match the Maven name in Jenkins Global Tool Configuration
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                git branch: 'master', 
+                    url: 'https://github.com/venkatareddy-n/spring-boot-mongo-docker.git'
+            }
+        }
+
+        stage('Build') {
+            steps {
+                sh 'mvn clean package'
+            }
+        }
+        stage('SonarQube') {
+            steps {
+                withSonarQubeEnv('sonar') {
+                    sh """
+                    mvn sonar:sonar \
+                        -Dsonar.projectKey=spring-boot-mongo \
+                        -Dsonar.projectName='Spring Boot Mongo Project' \
+                    """
+                }
+            }
+        } // Sonar stage close
+        
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    withDockerRegistry(credentialsId: 'docker') {
+                        sh 'docker build -t venkat2607/mongospring:latest .'
+                    }
+                }
+            }
+        }
+        stage('Push Docker Image') {
+            steps {
+                script {
+                    withDockerRegistry(credentialsId: 'docker') {
+                        sh 'docker push venkat2607/mongospring:latest'
+                    }
+                }
+            }
+        }
+        stage('Run Container') {
+            steps {
+                script {
+                    withDockerRegistry(credentialsId: 'docker') {
+                        sh 'docker run -d --name spring-container -p 9090:8080 venkat2607/mongospring:latest'
+                    }
+                }
+            }
+        }
+        
+    }
+}
